@@ -184,6 +184,8 @@
             <th data-key="category">카테고리<span class="sort-arrow"></span></th>
             <th data-key="floor" class="num">마지노선가<span class="sort-arrow"></span></th>
             <th data-key="currentLow" class="num">현재 최저가<span class="sort-arrow"></span></th>
+            <th data-key="histMin" class="num">역대 최저가<span class="sort-arrow"></span></th>
+            <th data-key="histMax" class="num">역대 최고가<span class="sort-arrow"></span></th>
             <th data-key="lowChannel">최저채널<span class="sort-arrow"></span></th>
             <th data-key="status">상태<span class="sort-arrow"></span></th>
           </tr></thead>
@@ -208,11 +210,6 @@
     <div class="card">
       <div class="card-head"><h2>채널별 최저가 분포</h2></div>
       <div class="chart-box" id="channelChart"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-head"><h2>카테고리별 경고 건수</h2></div>
-      <div class="chart-box" id="categoryChart"></div>
     </div>
   </section>
 
@@ -494,7 +491,7 @@
     tableBody.innerHTML = "";
     if (!rows.length){
       const tr = el("tr");
-      const td = el("td", {colspan: hasCategory ? "7" : "6", class:"empty-note"}, "검색 결과가 없어요");
+      const td = el("td", {colspan: hasCategory ? "9" : "8", class:"empty-note"}, "검색 결과가 없어요");
       tr.appendChild(td); tableBody.appendChild(tr);
       return;
     }
@@ -505,6 +502,8 @@
       if (hasCategory) tr.appendChild(el("td", null, r.category || "-"));
       tr.appendChild(el("td", {class:"num"}, won(r.floor)));
       tr.appendChild(el("td", {class:"num"}, won(r.currentLow)));
+      tr.appendChild(el("td", {class:"num"}, won(r.histMin)));
+      tr.appendChild(el("td", {class:"num"}, won(r.histMax)));
 
       const chTd = el("td");
       if (r.lowChannel){
@@ -672,59 +671,37 @@
     if (counts.every(c => c.count === 0)) box.appendChild(el("div", {class:"empty-note"}, "최저채널 정보가 없어요"));
   }
 
-  // ---------- category alert chart ----------
-  function renderCategoryChart(){
-    const box = document.getElementById("categoryChart");
-    box.innerHTML = "";
+  // ---------- historical min/max (across every loaded date snapshot) ----------
+  function computeHistoricalRanges(){
     const latest = state.snapshots[state.snapshots.length-1];
-    const hasCategory = latest.records.some(r => r.category);
-    if (!hasCategory){
-      box.appendChild(el("div", {class:"empty-note"}, "이 파일에는 카테고리 열이 없어요"));
-      return;
-    }
-    const byCat = {};
     latest.records.forEach(r=>{
-      if (!isAlert(r)) return;
-      const cat = r.category || "미분류";
-      byCat[cat] = (byCat[cat] || 0) + 1;
+      let mn = null, mx = null;
+      state.snapshots.forEach(s=>{
+        const rec = s.records.find(x => x.no === r.no);
+        if (rec && rec.currentLow != null){
+          if (mn == null || rec.currentLow < mn) mn = rec.currentLow;
+          if (mx == null || rec.currentLow > mx) mx = rec.currentLow;
+        }
+      });
+      r.histMin = mn;
+      r.histMax = mx;
     });
-    const entries = Object.keys(byCat).map(k => ({cat:k, count:byCat[k]})).sort((a,b) => b.count - a.count);
-    if (!entries.length){
-      box.appendChild(el("div", {class:"empty-note"}, "카테고리별 경고 상품이 없어요"));
-      return;
-    }
-    const max = Math.max.apply(null, entries.map(e => e.count));
-    const W = 300, rowH = 30, padL = 96, padR = 36, padT = 6;
-    const H = padT + rowH * entries.length + 6;
-    const svg = svgEl("svg", {viewBox:"0 0 " + W + " " + H});
-    entries.forEach((e,i)=>{
-      const cy = padT + i*rowH + rowH/2;
-      const barW = (W - padL - padR) * (e.count / max);
-      const label = svgEl("text", {x:padL-8, y:cy+4, "text-anchor":"end"});
-      label.textContent = e.cat.length > 12 ? e.cat.slice(0,12)+"…" : e.cat;
-      svg.appendChild(label);
-      svg.appendChild(svgEl("rect", {x:padL, y:cy-8, width:Math.max(barW,2), height:16, rx:4, fill:"var(--ch-own)"}));
-      const val = svgEl("text", {x:padL+barW+8, y:cy+4, class:"value-label"});
-      val.textContent = e.count + "건";
-      svg.appendChild(val);
-    });
-    box.appendChild(svg);
   }
 
   function renderAll(){
+    computeHistoricalRanges();
     renderKPIs();
     renderTable();
     renderAlerts();
     renderTrendChart();
     renderChannelChart();
-    renderCategoryChart();
   }
 
   populateProductSelect();
   renderAll();
   loadSnapshotFromServer();
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function(){
-    renderTrendChart(); renderChannelChart(); renderCategoryChart();
+    renderTrendChart(); renderChannelChart();
   });
 })();
 </script>
