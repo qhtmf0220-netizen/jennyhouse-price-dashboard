@@ -9,5 +9,11 @@
   "assets": {
     "directory": ".",
     "binding": "ASSETS"
-  }
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SNAPSHOT_KV",
+      "id": "9a7a4dbbfe404e7caaa8157953b6bb31"
+    }
+  ]
 }
