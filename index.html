@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>최저가 모니터</title>
 <meta name="color-scheme" content="light dark">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -142,7 +147,8 @@
     input[type="search"]{ width:130px; }
   }
 </style>
-
+</head>
+<body>
 <div class="page">
   <header class="topbar">
     <div class="brand">
@@ -210,7 +216,7 @@
     </div>
   </section>
 
-  <p class="foot">이 페이지는 업로드한 엑셀 파일을 브라우저 안에서만 읽어요 — 서버로 전송되거나 저장되지 않습니다. 새로고침하면 다시 업로드해야 해요.</p>
+  <p class="foot">엑셀을 업로드하면 팀 전체에 공유돼요 — 이후 이 링크로 들어오는 누구나 별도 업로드 없이 최신 데이터를 바로 보게 됩니다.</p>
 </div>
 
 <script>
@@ -351,13 +357,48 @@
       state.usingSample = false;
       state.fileName = file.name;
       const latestDate = snapshots[snapshots.length-1].date;
-      statusLine.textContent = "실제 데이터 표시 중 · 기준일 " + latestDate + " (" + snapshots.length + "개 날짜 탭 반영)";
+      statusLine.textContent = "업로드한 파일 반영 중 · 기준일 " + latestDate + " (" + snapshots.length + "개 날짜 탭) · 팀 전체에 공유하는 중...";
       statusLine.className = "subtitle is-live";
       fileNameEl.textContent = file.name;
       populateProductSelect();
       renderAll();
+      pushSnapshotToServer(snapshots, file.name, latestDate);
     });
   });
+
+  // ---------- shared server sync (Cloudflare KV via /api/snapshot) ----------
+  function pushSnapshotToServer(snapshots, fileName, latestDate){
+    fetch("/api/snapshot", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ snapshots, fileName, updatedAt: new Date().toISOString() })
+    }).then(function(res){
+      if (!res.ok) throw new Error("save failed");
+      statusLine.textContent = "실제 데이터 표시 중 (팀 전체 공유됨) · 기준일 " + latestDate + " (" + snapshots.length + "개 날짜 탭 반영)";
+      statusLine.className = "subtitle is-live";
+    }).catch(function(){
+      statusLine.textContent = "화면엔 반영됐지만 팀 공유 저장에는 실패했어요 — 새로고침하면 이 내용이 사라질 수 있어요. 다시 시도해주세요.";
+      statusLine.className = "subtitle is-error";
+    });
+  }
+
+  function loadSnapshotFromServer(){
+    fetch("/api/snapshot", { cache: "no-store" }).then(function(res){
+      if (!res.ok) return null;
+      return res.json();
+    }).then(function(data){
+      if (!data || !data.snapshots || !data.snapshots.length) return;
+      state.snapshots = data.snapshots;
+      state.usingSample = false;
+      state.fileName = data.fileName || "";
+      const latestDate = data.snapshots[data.snapshots.length-1].date;
+      statusLine.textContent = "실제 데이터 표시 중 (팀 전체 공유됨) · 기준일 " + latestDate + " (" + data.snapshots.length + "개 날짜 탭 반영)" + (data.updatedAt ? " · 최근 업로드: " + new Date(data.updatedAt).toLocaleString("ko-KR") : "");
+      statusLine.className = "subtitle is-live";
+      if (data.fileName) fileNameEl.textContent = data.fileName;
+      populateProductSelect();
+      renderAll();
+    }).catch(function(){ /* no shared data yet — keep showing sample */ });
+  }
 
   // ---------- product select ----------
   const productSelect = document.getElementById("productSelect");
@@ -681,8 +722,11 @@
 
   populateProductSelect();
   renderAll();
+  loadSnapshotFromServer();
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function(){
     renderTrendChart(); renderChannelChart(); renderCategoryChart();
   });
 })();
 </script>
+</body>
+</html>
