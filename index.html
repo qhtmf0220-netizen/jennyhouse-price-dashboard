@@ -477,7 +477,24 @@
   // ---------- table ----------
   const tableBody = document.getElementById("priceTableBody");
   const tableSearch = document.getElementById("tableSearch");
-  tableSearch.addEventListener("input", function(){ state.search = tableSearch.value; renderTable(); });
+  tableSearch.addEventListener("input", function(){
+    state.search = tableSearch.value;
+    renderTable();
+    syncTrendSelectionWithSearch();
+  });
+
+  // when a search narrows the table to a match, auto-show that product's history
+  // in the "날짜별 가격 추이" card instead of requiring a manual dropdown pick.
+  function syncTrendSelectionWithSearch(){
+    const q = state.search.trim().toLowerCase();
+    if (!q) return;
+    const latest = state.snapshots[state.snapshots.length-1];
+    const match = latest.records.find(r => r.name.toLowerCase().indexOf(q) !== -1);
+    if (match && productSelect.value !== String(match.no)){
+      productSelect.value = String(match.no);
+      renderTrendChart();
+    }
+  }
   document.querySelectorAll("#priceTable th[data-key]").forEach(th=>{
     th.addEventListener("click", function(){
       const key = th.getAttribute("data-key");
