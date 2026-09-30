@@ -110,6 +110,8 @@
 
   .chip{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; }
   .chip::before{ content:""; width:8px; height:8px; border-radius:50%; background:var(--chip-color,var(--ink-muted)); flex:none; }
+  .chip-link{ margin-left:8px; font-size:11.5px; font-weight:600; color:var(--accent); text-decoration:none; }
+  .chip-link:hover{ text-decoration:underline; }
 
   .badge{ display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; padding:3px 8px; border-radius:999px; }
   .badge.good{ color:var(--good); background:color-mix(in srgb, var(--good) 14%, transparent); }
@@ -291,8 +293,22 @@
   const state = { snapshots: sampleSnapshots(), usingSample: true, fileName: "", sort:{key:"no",dir:1}, search:"" };
 
   // ---------- excel parsing ----------
+  function extractLinkFromCell(ws, r, c){
+    if (c == null) return null;
+    const addr = XLSX.utils.encode_cell({r:r, c:c});
+    const cell = ws[addr];
+    if (!cell) return null;
+    if (cell.l && cell.l.Target) return cell.l.Target;
+    if (typeof cell.f === "string"){
+      const m = cell.f.match(/HYPERLINK\(\s*"([^"]+)"/i);
+      if (m) return m[1];
+    }
+    if (typeof cell.v === "string" && /^https?:\/\//i.test(cell.v)) return cell.v;
+    return null;
+  }
+
   function parseWorkbook(buf){
-    const wb = XLSX.read(buf, {type:"array"});
+    const wb = XLSX.read(buf, {type:"array", cellFormula:true});
     const snapshots = [];
     wb.SheetNames.forEach(sheetName=>{
       if (sheetName.indexOf("사용법") !== -1) return;
@@ -308,11 +324,20 @@
       headerRow.forEach((c,j)=>{ if (typeof c === "string") idx[c.trim()] = j; });
       const need = ["No.","상품명","마지노선가","현재 최저가"];
       if (!need.every(k => k in idx)) return;
+      const linkColIdx = {};
+      CHANNELS.forEach(ch=>{ const h = ch + " 링크"; if (h in idx) linkColIdx[ch] = idx[h]; });
       const records = [];
       for (let i=headerIdx+1;i<rows.length;i++){
         const row = rows[i] || [];
         const noVal = row[idx["No."]];
         if (typeof noVal !== "number") continue;
+        const links = {};
+        CHANNELS.forEach(ch=>{
+          const c = linkColIdx[ch];
+          if (c == null) return;
+          const url = extractLinkFromCell(ws, i, c);
+          if (url) links[ch] = url;
+        });
         records.push({
           no: noVal,
           name: row[idx["상품명"]] != null ? String(row[idx["상품명"]]) : "",
@@ -321,6 +346,7 @@
           currentLow: typeof row[idx["현재 최저가"]] === "number" ? row[idx["현재 최저가"]] : null,
           lowChannel: ("최저채널" in idx && typeof row[idx["최저채널"]] === "string") ? row[idx["최저채널"]] : null,
           status: ("상태" in idx && typeof row[idx["상태"]] === "string") ? row[idx["상태"]] : null,
+          links: links,
         });
       }
       if (records.length) snapshots.push({date: String(sheetName), records});
@@ -510,6 +536,11 @@
         const chip = el("span", {class:"chip"}, r.lowChannel);
         chip.style.setProperty("--chip-color", "var(" + (CHANNEL_VAR[r.lowChannel] || "--ink-muted") + ")");
         chTd.appendChild(chip);
+        const lowLink = r.links && r.links[r.lowChannel];
+        if (lowLink){
+          const a = el("a", {href:lowLink, target:"_blank", rel:"noopener noreferrer", class:"chip-link"}, "바로가기 ↗");
+          chTd.appendChild(a);
+        }
       } else { chTd.textContent = "-"; }
       tr.appendChild(chTd);
 
