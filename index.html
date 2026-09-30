@@ -105,6 +105,7 @@
   }
   th.num, td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   td.name{ white-space:normal; min-width:180px; }
+  td.current-low{ font-weight:800; color:var(--accent); }
   tbody tr:hover{ background:var(--accent-wash); }
   .sort-arrow{ opacity:0.5; margin-left:3px; }
 
@@ -527,7 +528,7 @@
       tr.appendChild(el("td", {class:"name"}, r.name));
       if (hasCategory) tr.appendChild(el("td", null, r.category || "-"));
       tr.appendChild(el("td", {class:"num"}, won(r.floor)));
-      tr.appendChild(el("td", {class:"num"}, won(r.currentLow)));
+      tr.appendChild(el("td", {class:"num current-low"}, won(r.currentLow)));
       tr.appendChild(el("td", {class:"num"}, won(r.histMin)));
       tr.appendChild(el("td", {class:"num"}, won(r.histMax)));
 
