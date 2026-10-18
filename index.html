@@ -14,6 +14,7 @@
     --accent:#9c3b5e; --accent-ink:#ffffff; --accent-wash:rgba(156,59,94,0.08);
     --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
     --ch-own:#2a78d6; --ch-oy:#eb6834; --ch-coupang:#1baf7a; --ch-naver:#eda100;
+    --price-up:#d03b3b; --price-down:#2563eb;
     --radius:14px;
     color-scheme: light;
   }
@@ -25,6 +26,7 @@
       --accent:#c65683; --accent-ink:#1a1a19; --accent-wash:rgba(198,86,131,0.14);
       --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#e66767;
       --ch-own:#3987e5; --ch-oy:#d95926; --ch-coupang:#199e70; --ch-naver:#c98500;
+      --price-up:#e66767; --price-down:#5b9bf5;
       color-scheme: dark;
     }
   }
@@ -35,6 +37,7 @@
     --accent:#c65683; --accent-ink:#1a1a19; --accent-wash:rgba(198,86,131,0.14);
     --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#e66767;
     --ch-own:#3987e5; --ch-oy:#d95926; --ch-coupang:#199e70; --ch-naver:#c98500;
+    --price-up:#e66767; --price-down:#5b9bf5;
     color-scheme: dark;
   }
 
@@ -106,6 +109,10 @@
   th.num, td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   td.name{ white-space:normal; min-width:180px; }
   td.current-low{ font-weight:800; color:var(--accent); }
+  .price-delta{ font-weight:600; font-variant-numeric:tabular-nums; }
+  .price-delta.up{ color:var(--price-up); }
+  .price-delta.down{ color:var(--price-down); }
+  .price-delta.flat{ color:var(--ink-muted); }
   tbody tr:hover{ background:var(--accent-wash); }
   .sort-arrow{ opacity:0.5; margin-left:3px; }
 
@@ -187,6 +194,7 @@
             <th data-key="category">카테고리<span class="sort-arrow"></span></th>
             <th data-key="floor" class="num">마지노선가<span class="sort-arrow"></span></th>
             <th data-key="currentLow" class="num">현재 최저가<span class="sort-arrow"></span></th>
+            <th data-key="prevDelta" class="num">직전대비<span class="sort-arrow"></span></th>
             <th data-key="histMin" class="num">역대 최저가<span class="sort-arrow"></span></th>
             <th data-key="histMax" class="num">역대 최고가<span class="sort-arrow"></span></th>
             <th data-key="lowChannel">최저채널<span class="sort-arrow"></span></th>
@@ -232,6 +240,13 @@
   function isAlert(r){
     if (r.status) return r.status.indexOf("이하") !== -1;
     return r.floor!=null && r.currentLow!=null && r.currentLow < r.floor;
+  }
+  // 상승(가격 인상)은 빨강, 하락(가격 인하)은 파랑 — 국내 관례에 맞춤.
+  function formatDelta(d){
+    if (d == null || isNaN(d)) return { cls:"flat", text:"-" };
+    if (d === 0) return { cls:"flat", text:"변동없음" };
+    if (d > 0) return { cls:"up", text:"▲ " + won(d) };
+    return { cls:"down", text:"▼ " + won(Math.abs(d)) };
   }
   // "nice" round-number axis scale (d3-style): given a raw data range, returns
   // a slightly wider [min,max] snapped to a clean step, plus the tick values.
@@ -535,7 +550,7 @@
     tableBody.innerHTML = "";
     if (!rows.length){
       const tr = el("tr");
-      const td = el("td", {colspan: hasCategory ? "9" : "8", class:"empty-note"}, "검색 결과가 없어요");
+      const td = el("td", {colspan: hasCategory ? "10" : "9", class:"empty-note"}, "검색 결과가 없어요");
       tr.appendChild(td); tableBody.appendChild(tr);
       return;
     }
@@ -546,6 +561,8 @@
       if (hasCategory) tr.appendChild(el("td", null, r.category || "-"));
       tr.appendChild(el("td", {class:"num"}, won(r.floor)));
       tr.appendChild(el("td", {class:"num current-low"}, won(r.currentLow)));
+      const d = formatDelta(r.prevDelta);
+      tr.appendChild(el("td", {class:"num price-delta " + d.cls}, d.text));
       tr.appendChild(el("td", {class:"num"}, won(r.histMin)));
       tr.appendChild(el("td", {class:"num"}, won(r.histMax)));
 
@@ -737,8 +754,21 @@
     });
   }
 
+  // ---------- 직전 날짜 탭 대비 증감 ----------
+  function computePrevDelta(){
+    const latest = state.snapshots[state.snapshots.length-1];
+    const prev = state.snapshots.length > 1 ? state.snapshots[state.snapshots.length-2] : null;
+    latest.records.forEach(r=>{
+      if (!prev){ r.prevDelta = null; return; }
+      const prevRec = prev.records.find(x => x.no === r.no);
+      if (!prevRec || prevRec.currentLow == null || r.currentLow == null){ r.prevDelta = null; return; }
+      r.prevDelta = r.currentLow - prevRec.currentLow;
+    });
+  }
+
   function renderAll(){
     computeHistoricalRanges();
+    computePrevDelta();
     renderKPIs();
     renderTable();
     renderAlerts();
