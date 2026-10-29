@@ -193,6 +193,7 @@
             <th data-key="name">상품명<span class="sort-arrow"></span></th>
             <th data-key="category">카테고리<span class="sort-arrow"></span></th>
             <th data-key="floor" class="num">마지노선가<span class="sort-arrow"></span></th>
+            <th data-key="olyoungSale" class="num">올영세일가<span class="sort-arrow"></span></th>
             <th data-key="currentLow" class="num">현재 최저가<span class="sort-arrow"></span></th>
             <th data-key="prevDelta" class="num">직전대비<span class="sort-arrow"></span></th>
             <th data-key="histMin" class="num">역대 최저가<span class="sort-arrow"></span></th>
@@ -233,6 +234,44 @@
   const SVGNS = "http://www.w3.org/2000/svg";
   const CHANNELS = ["자사몰","올리브영","쿠팡","네이버"];
   const CHANNEL_VAR = { "자사몰":"--ch-own", "올리브영":"--ch-oy", "쿠팡":"--ch-coupang", "네이버":"--ch-naver" };
+
+  // 2025년 9월 올리브영 세일 할인가 (고정 반영 — 상품명 기준 매칭, 엑셀 업로드와 무관)
+  const OLYOUNG_SALE_MAP = {
+    "제니하우스 살롱테라피 데미지케어 샴푸 500ml": 18050,
+    "제니하우스 살롱테라피 데미지케어 트리트먼트 240ml": 11970,
+    "제니하우스 살롱테라피 데미지케어 헤어오일세럼 100ml": 17480,
+    "제니하우스 루트 볼륨 픽서 200ml": 14210,
+    "제니하우스 스타일 컬링 세럼150ml": 9980,
+    "제니하우스 실크 케어 에센스 미스트 200ml": 15200,
+    "제니하우스 인텐시브 노워시 엔젤링크림150ml": 10800,
+    "제니하우스 히팅케어 퀵 드라이 미스트200ml": 14440,
+    "제니하우스 셀프업 헤어커버 마스카라 01내추럴브라운_8ml": 9120,
+    "제니하우스 셀프업 헤어커버 마스카라 02다크브라운_8ml": 9120,
+    "제니하우스 셀프업 헤어커버 마스카라 03블랙_8ml": 9120,
+    "제니하우스 셀프업 헤어라인 브러쉬 01. 내추럴브라운": 11310,
+    "제니하우스 셀프업 헤어라인 브러쉬 02. 다크브라운": 11310,
+    "제니하우스 프리미엄 헤어컬러 블랙 1N": 8010,
+    "제니하우스 프리미엄 헤어컬러 다크브라운 5NB": 8010,
+    "제니하우스 프리미엄 헤어컬러 내츄럴브라운 6NB": 8010,
+    "제니하우스 프리미엄 헤어컬러 로즈골드브라운 7RB": 8010,
+    "제니하우스 프리미엄 헤어컬러 핑크브라운 11PB": 8010,
+    "제니하우스 프리미엄 헤어컬러 애쉬브라운 11AB": 8010,
+    "제니하우스 프리미엄 헤어컬러 애쉬누드베이지 12AND": 8010,
+    "제니하우스 프리미엄 헤어컬러 애쉬블루 7ABL": 8010,
+    "제니하우스 프리미엄 헤어컬러 애쉬빈티지카키 6AK": 8010,
+    "제니하우스 프리미엄 헤어컬러 브릭오렌지 9BO": 8010,
+    "제니하우스 프리미엄 헤어컬러 페이크블랙 1FK": 8010
+  };
+  function normalizeProductName(s){
+    return String(s || "").replace(/[​‌‍﻿]/g, "").replace(/\s+/g, " ").trim();
+  }
+  const OLYOUNG_SALE_MAP_NORM = {};
+  Object.keys(OLYOUNG_SALE_MAP).forEach(k => { OLYOUNG_SALE_MAP_NORM[normalizeProductName(k)] = OLYOUNG_SALE_MAP[k]; });
+  function lookupOlyoungSale(name){
+    if (!name) return null;
+    const v = OLYOUNG_SALE_MAP_NORM[normalizeProductName(name)];
+    return typeof v === "number" ? v : null;
+  }
 
   function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
   function won(n){ return (n==null || isNaN(n)) ? "-" : Math.round(n).toLocaleString("ko-KR") + "원"; }
@@ -532,6 +571,7 @@
     if (categoryTh) categoryTh.hidden = !hasCategory;
 
     let rows = latest.records.slice();
+    rows.forEach(r => { if (r.olyoungSale === undefined) r.olyoungSale = lookupOlyoungSale(r.name); });
     const q = state.search.trim().toLowerCase();
     if (q) rows = rows.filter(r => r.name.toLowerCase().indexOf(q) !== -1);
     const { key, dir } = state.sort;
@@ -550,7 +590,7 @@
     tableBody.innerHTML = "";
     if (!rows.length){
       const tr = el("tr");
-      const td = el("td", {colspan: hasCategory ? "10" : "9", class:"empty-note"}, "검색 결과가 없어요");
+      const td = el("td", {colspan: hasCategory ? "11" : "10", class:"empty-note"}, "검색 결과가 없어요");
       tr.appendChild(td); tableBody.appendChild(tr);
       return;
     }
@@ -560,6 +600,7 @@
       tr.appendChild(el("td", {class:"name"}, r.name));
       if (hasCategory) tr.appendChild(el("td", null, r.category || "-"));
       tr.appendChild(el("td", {class:"num"}, won(r.floor)));
+      tr.appendChild(el("td", {class:"num"}, won(r.olyoungSale)));
       tr.appendChild(el("td", {class:"num current-low"}, won(r.currentLow)));
       const d = formatDelta(r.prevDelta);
       tr.appendChild(el("td", {class:"num price-delta " + d.cls}, d.text));
