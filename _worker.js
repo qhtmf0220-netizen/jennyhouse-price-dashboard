@@ -33,6 +33,36 @@ export default {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
+    // detailed data for the dashboard: every collected sale option per product/channel/date
+    // (written by the daily Aside collector; KV key "data")
+    if (url.pathname === "/api/data") {
+      if (request.method === "GET") {
+        const data = await env.SNAPSHOT_KV.get("data");
+        return new Response(data ?? "null", {
+          status: data ? 200 : 404,
+          headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+        });
+      }
+      if (request.method === "POST") {
+        let text;
+        try {
+          text = await request.text();
+          const parsed = JSON.parse(text);
+          if (!parsed || !Array.isArray(parsed.rows) || !Array.isArray(parsed.products)) throw new Error("bad shape");
+        } catch (err) {
+          return new Response(JSON.stringify({ ok: false, error: "invalid payload" }), {
+            status: 400,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          });
+        }
+        await env.SNAPSHOT_KV.put("data", text);
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        });
+      }
+      return new Response("Method Not Allowed", { status: 405 });
+    }
+
     // everything else: serve the static site as usual
     return env.ASSETS.fetch(request);
   },
