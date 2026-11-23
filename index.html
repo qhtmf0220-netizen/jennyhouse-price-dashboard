@@ -188,7 +188,7 @@ const oySale = name => OY_SALE_N[normName(name)] ?? null;
 const won = n => n==null||isNaN(n) ? "-" : Math.round(n).toLocaleString("ko-KR");
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const $ = id => document.getElementById(id);
-let D, rows, prods, dates, cur, sel = null, sort = {k:"st", dir:1};
+let D, rows, prods, dates, cur, sel = null, sort = {k:"no", dir:1};
 
 function idx(){
   // best[date][no][ch] = row with min unit (not sold out)
